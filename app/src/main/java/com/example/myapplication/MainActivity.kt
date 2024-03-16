@@ -13,8 +13,8 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.example.myapplication.R.id.button
-import com.example.myapplication.R.id.textView
 import com.example.myapplication.R.layout.activity_main
 
 class DataElement constructor(var peak: Short, var timeLong: Long) {
@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity() {
     //
     private var audioRecord: AudioRecord? = null
     private var textView: TextView? = null
+    private lateinit var buttonSaved: Button
     private var result: String? = null
 
     //    private val testTimeout: Long = 1000
@@ -42,6 +43,7 @@ class MainActivity : ComponentActivity() {
         setContentView(/* layoutResID = */ activity_main
         )
         val btnCenter = findViewById<Button>(button)
+        buttonSaved = btnCenter
         textView = findViewById<TextView>(R.id.textView)
         btnCenter.setOnClickListener {
             onMainButtonPress()
@@ -75,9 +77,12 @@ class MainActivity : ComponentActivity() {
             audioFormat,
             bufferSize
         )
+        buttonSaved.background = ContextCompat.getDrawable(this, R.drawable.btn_img_circular_pending)
+        Log.v("App-Log", "Change state")
         recordThenExecute(bufferSize, recordingTimeout) {
             analyzeResults()
         }
+        buttonSaved.background = ContextCompat.getDrawable(this, R.drawable.btn_circular)
         Log.v("App-Log", "Waiting for update")
         if (result != null) {
             textView?.text = result
