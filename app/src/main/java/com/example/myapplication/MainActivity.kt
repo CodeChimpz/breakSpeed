@@ -60,13 +60,7 @@ class MainActivity : ComponentActivity() {
             ) != PackageManager.PERMISSION_GRANTED
         ) {
             Log.v("App-Log", "checkSelfPermission FAILED")
-            // TODO: Consider calling
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
             return
         }
         audioRecord = AudioRecord(
@@ -95,12 +89,15 @@ class MainActivity : ComponentActivity() {
                     // Add to data with timestamp
                     val newElement = DataElement(maxAmplitude, timeNow)
                     recordedTrack?.add(newElement)
-                    Log.v("App-Log", "${newElement.peak} : ${newElement.timeLong} : ${recordedTrack?.size}")
+                    Log.v(
+                        "App-Log",
+                        "${newElement.peak} : ${newElement.timeLong} : ${recordedTrack?.size}"
+                    )
                 }
             }
             stopRecording()
         }.start()
-        Log.v("App-Log","Waiting for update")
+        Log.v("App-Log", "Waiting for update")
         while (true) {
             if (result != null) {
                 textView?.text = result
@@ -119,13 +116,13 @@ class MainActivity : ComponentActivity() {
 
     private fun analyzeResults() {
         Log.v("App-Log", "analyzeResults")
-        val sortedTrack = recordedTrack?.sortedWith(compareBy { it.peak } )?.reversed()
-        val secondHit = sortedTrack?.get(0)
+        val sortedTrack = recordedTrack?.sortedWith(compareBy { it.peak })?.reversed()
         val firstHit = sortedTrack?.get(1)
+        Log.v("App-Log", "first peak ${firstHit?.peak}")
+        val secondHit = sortedTrack?.get(0)
+        Log.v("App-Log", "second peak ${secondHit?.peak}")
         val timeDiff = secondHit?.timeLong?.minus(firstHit?.timeLong!!)
         Log.v("App-Log", timeDiff.toString())
-        Log.v("App-Log", "first peak ${firstHit?.peak}")
-        Log.v("App-Log", "second peak ${secondHit?.peak}")
         //TODO:
         result = "" + timeDiff + ""
     }
