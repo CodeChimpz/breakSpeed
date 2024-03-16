@@ -17,16 +17,21 @@ import com.example.myapplication.R.id.button
 import com.example.myapplication.R.id.textView
 import com.example.myapplication.R.layout.activity_main
 
-class DataElement constructor(peak: Short, timeLong: Long) {
-    var peak: Short? = peak
-    var timeLong: Long? = timeLong
+class DataElement constructor(var peak: Short, var timeLong: Long) {
 }
 
 class MainActivity : ComponentActivity() {
+    //    const
+    private val AMPL_CHANGE_T_MS = 100
+    private val AMPL_CHANGE_T_PEAKS = 2
+    private val recordingTimeout: Long = 10000
+
+    //
     private var audioRecord: AudioRecord? = null
     private var textView: TextView? = null
     private var result: String? = null
-    private val recordTime: Long = 10000
+
+    //    private val testTimeout: Long = 1000
     private var startTime: Long? = null
     private var isRecording = false
     private var recordedTrack: ArrayList<DataElement>? = arrayListOf()
@@ -70,39 +75,44 @@ class MainActivity : ComponentActivity() {
             audioFormat,
             bufferSize
         )
+        recordThenExecute(bufferSize, recordingTimeout) {
+            analyzeResults()
+        }
+        Log.v("App-Log", "Waiting for update")
+        if (result != null) {
+            textView?.text = result
+        }
+    }
 
+    private fun recordThenExecute(bufferSize: Int, setTimeout: Long, cb: () -> Unit = {}) {
         audioRecord?.startRecording()
         recordedTrack = arrayListOf()
         startTime = System.currentTimeMillis()
         isRecording = true
         var totalTime: Long = 0
-        // Start a separate thread to read and analyze audio samples
-        Thread {
-            val buffer = ShortArray(bufferSize)
-            while (totalTime < recordTime) {
-                val read = audioRecord?.read(buffer, 0, bufferSize)
-                read?.let {
-                    // Analyze audio samples and find volume peaks
-                    val maxAmplitude: Short = buffer.maxOrNull() ?: 0
-                    val timeNow = System.currentTimeMillis()
-                    totalTime = timeNow - startTime!!
-                    // Add to data with timestamp
-                    val newElement = DataElement(maxAmplitude, timeNow)
-                    recordedTrack?.add(newElement)
-                    Log.v(
-                        "App-Log",
-                        "${newElement.peak} : ${newElement.timeLong} : ${recordedTrack?.size}"
-                    )
-                }
-            }
-            stopRecording()
-        }.start()
-        Log.v("App-Log", "Waiting for update")
-        while (true) {
-            if (result != null) {
-                textView?.text = result
+//        TODO: Later
+//        Start a separate thread to read and analyze audio samples
+//        Thread {
+        val buffer = ShortArray(bufferSize)
+        while (totalTime < setTimeout) {
+            val read = audioRecord?.read(buffer, 0, bufferSize)
+            read?.let {
+                // Analyze audio samples and find volume peaks
+                val maxAmplitude: Short = buffer.maxOrNull() ?: 0
+                val timeNow = System.currentTimeMillis()
+                totalTime = timeNow - startTime!!
+                // Add to data with timestamp
+                val newElement = DataElement(maxAmplitude, timeNow)
+                recordedTrack?.add(newElement)
+                Log.v(
+                    "App-Log",
+                    "${newElement.peak} : ${newElement.timeLong} : ${recordedTrack?.size}"
+                )
             }
         }
+        stopRecording()
+        cb()
+//        }.start()
     }
 
     private fun stopRecording() {
@@ -110,21 +120,21 @@ class MainActivity : ComponentActivity() {
         isRecording = false
         audioRecord?.stop()
         audioRecord?.release()
-        audioRecord = null
-        analyzeResults()
     }
 
     private fun analyzeResults() {
         Log.v("App-Log", "analyzeResults")
-        val sortedTrack = recordedTrack?.sortedWith(compareBy { it.peak })?.reversed()
-        val firstHit = sortedTrack?.get(1)
-        Log.v("App-Log", "first peak ${firstHit?.peak}")
-        val secondHit = sortedTrack?.get(0)
+        val secondHit = recordedTrack?.maxBy { it.peak }
+        val secondHitIndex = recordedTrack?.indexOf(secondHit) ?: 0
+        val splitIndex = if (AMPL_CHANGE_T_PEAKS >= secondHitIndex) (AMPL_CHANGE_T_PEAKS + 1)
+        else (secondHitIndex - AMPL_CHANGE_T_PEAKS)
         Log.v("App-Log", "second peak ${secondHit?.peak}")
-        val timeDiff = secondHit?.timeLong?.minus(firstHit?.timeLong!!)
+        val firstHit = recordedTrack?.slice(0..<splitIndex)?.maxBy { it.peak }
+        Log.v("App-Log", "first peak ${firstHit?.peak}")
+        val timeDiff = secondHit?.timeLong?.minus(firstHit?.timeLong!!) ?: 0
         Log.v("App-Log", timeDiff.toString())
         //TODO:
-        result = "" + timeDiff + ""
+        result = "" + timeDiff.div(1000) + "s"
     }
 
     override fun onDestroy() {
