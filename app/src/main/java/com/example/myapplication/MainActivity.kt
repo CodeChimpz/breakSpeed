@@ -16,14 +16,16 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.myapplication.R.id.button
 import com.example.myapplication.R.layout.activity_main
+import java.math.RoundingMode
 
 class DataElement constructor(var peak: Short, var timeLong: Long) {
 }
 
 class MainActivity : ComponentActivity() {
     //    const
+    private val DEFAULT_DISTANCE_CM = 143
     private val AMPL_CHANGE_T_MS = 100
-    private val AMPL_CHANGE_T_PEAKS = 2
+    private val AMPL_CHANGE_T_PEAKS = 0
     private val recordingTimeout: Long = 10000
 
     //
@@ -77,7 +79,8 @@ class MainActivity : ComponentActivity() {
             audioFormat,
             bufferSize
         )
-        buttonSaved.background = ContextCompat.getDrawable(this, R.drawable.btn_img_circular_pending)
+        buttonSaved.background =
+            ContextCompat.getDrawable(this, R.drawable.btn_img_circular_pending)
         Log.v("App-Log", "Change state")
         recordThenExecute(bufferSize, recordingTimeout) {
             analyzeResults()
@@ -136,10 +139,16 @@ class MainActivity : ComponentActivity() {
         Log.v("App-Log", "second peak ${secondHit?.peak}")
         val firstHit = recordedTrack?.slice(0..<splitIndex)?.maxBy { it.peak }
         Log.v("App-Log", "first peak ${firstHit?.peak}")
-        val timeDiff = secondHit?.timeLong?.minus(firstHit?.timeLong!!) ?: 0
-        Log.v("App-Log", timeDiff.toString())
+        val timeDiffMs = secondHit?.timeLong?.minus(firstHit?.timeLong!!) ?: 0
+        val timeDiffS = timeDiffMs.toDouble() / 1000
+        Log.v("App-Log", "timeDiffMs $timeDiffMs $timeDiffS")
+        if (timeDiffS <= 0) {
+            return
+        }
+        val velocity = (DEFAULT_DISTANCE_CM / timeDiffS) * 2.24
+        val velocityRounded = velocity.toBigDecimal().setScale(2, RoundingMode.UP)
         //TODO:
-        result = "" + timeDiff.div(1000) + "s"
+        result = "" + velocityRounded + "m/s"
     }
 
     override fun onDestroy() {
