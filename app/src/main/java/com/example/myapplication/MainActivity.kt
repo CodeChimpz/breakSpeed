@@ -140,7 +140,7 @@ class MainActivity : ComponentActivity() {
 //        if (peak.toInt() == 0) {
 //            return
 //        }
-        val MAX_WIDTH: Double = 30000.0
+        val MAX_WIDTH: Double = 10000.0
         val layoutParams = vizualSimple?.layoutParams
         layoutParams?.width = (peak / MAX_WIDTH * vizualSimpleSize!!).toInt()
 //        Log.v("App-Log", "${layoutParams?.width} $vizualSimpleSize")
