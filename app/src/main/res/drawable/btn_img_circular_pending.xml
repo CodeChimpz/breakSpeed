@@ -8,8 +8,8 @@
 <!--        android:gravity="center" />-->
     <item
         android:id="@+id/background_shadow"
-        android:width="300dp"
-        android:height="300dp"
+        android:width="100dp"
+        android:height="100dp"
         android:drawable="@drawable/btn_circular_shadow"
         android:gravity="center" />
 </layer-list>

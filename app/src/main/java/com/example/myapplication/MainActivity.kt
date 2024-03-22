@@ -8,21 +8,21 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.example.myapplication.R.drawable.viz_simple
 import com.example.myapplication.R.id.button
 import com.example.myapplication.R.layout.activity_main
+import com.example.myapplication.buttons.MainButton
+import com.example.myapplication.util.DataElement
 import java.math.RoundingMode
 import kotlin.math.absoluteValue
-import kotlin.math.max
-import kotlin.math.min
 
-class DataElement constructor(var peak: Short, var timeLong: Long) {
-}
 
 class MainActivity : ComponentActivity() {
     //    const
@@ -34,15 +34,17 @@ class MainActivity : ComponentActivity() {
     private val recordingTimeout: Long = 10000
 
     //
-    private var audioRecord: AudioRecord? = null
-    private var textView: TextView? = null
-    private lateinit var buttonSaved: Button
     private var result: String? = null
-
-    //    private val testTimeout: Long = 1000
     private var startTime: Long? = null
+    private var currentTime: Long? = null
     private var isRecording = false
     private var recordedTrack: ArrayList<DataElement>? = arrayListOf()
+
+    //
+    private var audioRecord: AudioRecord? = null
+    private var textView: TextView? = null
+    private var vizualSimple: View? = null
+    private lateinit var mainButton: MainButton
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,23 +52,15 @@ class MainActivity : ComponentActivity() {
         setContentView(/* layoutResID = */ activity_main
         )
         val btnCenter = findViewById<Button>(button)
-        buttonSaved = btnCenter
+        mainButton = MainButton(btnCenter, this, this)
         textView = findViewById<TextView>(R.id.textView)
-        btnCenter.setOnClickListener {
-            buttonSaved.isClickable = false;
-            Log.v("App-Log", "isClickable FALSE")
+        vizualSimple = findViewById<View>(R.id.simpleViz)
+        mainButton.setOnClickListener(cb = {
             Thread {
-                onMainButtonPress()
+                Log.v("App-Log", "startRecording")
+                startRecording()
             }.start()
-            buttonSaved.isClickable = true;
-            Log.v("App-Log", "isClickable TRUE")
-        }
-    }
-
-    fun runOnUiThreadCb(cb: () -> Unit) {
-        runOnUiThread {
-            cb()
-        }
+        })
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -79,7 +73,6 @@ class MainActivity : ComponentActivity() {
             channelConfig,
             audioFormat
         ) / 4
-
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.RECORD_AUDIO
@@ -96,23 +89,15 @@ class MainActivity : ComponentActivity() {
             audioFormat,
             bufferSize
         )
-        runOnUiThreadCb {
-            buttonSaved.background =
-                ContextCompat.getDrawable(this, R.drawable.btn_img_circular_pending)
-        }
-        Log.v("App-Log", "Change state")
         recordThenExecute(bufferSize, recordingTimeout) {
             analyzeResults()
         }
-        runOnUiThreadCb {
-            buttonSaved.background = ContextCompat.getDrawable(this, R.drawable.btn_circular)
-        }
-        Log.v("App-Log", "Waiting for update")
         if (result != null) {
-            runOnUiThreadCb {
+            runOnUiThread {
                 textView?.text = result
             }
         }
+        mainButton.deactivateView()
     }
 
     private fun recordThenExecute(bufferSize: Int, setTimeout: Long, cb: () -> Unit = {}) {
@@ -121,29 +106,36 @@ class MainActivity : ComponentActivity() {
         startTime = System.currentTimeMillis()
         isRecording = true
         var totalTime: Long = 0
-//        TODO: Later
-//        Start a separate thread to read and analyze audio samples
-//        Thread {
         val buffer = ShortArray(bufferSize)
         while (totalTime < setTimeout) {
             val read = audioRecord?.read(buffer, 0, bufferSize)
             read?.let {
                 // Analyze audio samples and find volume peaks
                 val maxAmplitude: Short = buffer.maxOrNull() ?: 0
+                Log.v("App-Log", "$maxAmplitude")
                 val timeNow = System.currentTimeMillis()
                 totalTime = timeNow - startTime!!
                 // Add to data with timestamp
                 val newElement = DataElement(maxAmplitude, timeNow)
                 recordedTrack?.add(newElement)
-                Log.v(
-                    "App-Log-GRAPH",
-                    "${newElement.peak} : ${newElement.timeLong} : ${recordedTrack?.size}"
-                )
+                mainButton.updateButtonViewProgressDefault((totalTime.toDouble() / setTimeout.toDouble() * 100).toInt())
+                runOnUiThread {
+                    visualiseSimple(maxAmplitude.toDouble())
+                }
             }
         }
         stopRecording()
         cb()
-//        }.start()
+    }
+
+    private fun visualiseSimple(peak: Double) {
+        if (peak > 0) {
+            vizualSimple?.background = ContextCompat.getDrawable(this, viz_simple)
+        }
+        val MAX_WIDTH = 50000
+        val layoutParams = vizualSimple?.layoutParams
+        layoutParams?.width = (peak / MAX_WIDTH * layoutParams?.width!!).toInt()
+        vizualSimple?.layoutParams = layoutParams
     }
 
     private fun stopRecording() {
@@ -155,12 +147,8 @@ class MainActivity : ComponentActivity() {
 
     private fun analyzeResults() {
         Log.v("App-Log", "analyzeResults")
-
-        var secondHit: DataElement? = recordedTrack?.maxBy { it.peak }
+        val secondHit: DataElement? = recordedTrack?.maxBy { it.peak }
         val secondHitIndex = recordedTrack?.indexOf(secondHit) ?: 0
-
-//        val splitIndex = if (1 >= secondHitIndex) (AMPL_CHANGE_T_PEAKS + 1)
-//        else (secondHitIndex - AMPL_CHANGE_T_PEAKS)
         val splitIndex = if (secondHitIndex > 1) {
             secondHitIndex - 1
         } else {
@@ -168,8 +156,7 @@ class MainActivity : ComponentActivity() {
         }
         Log.v("App-Log", "second peak ${secondHit?.peak}")
         var firstHitTemp: DataElement? = recordedTrack?.slice(0..<splitIndex)?.maxBy { it.peak }
-
-        var timeDiffMs = getTimeDiffMs(secondHit!!, firstHitTemp!!)
+        var timeDiffMs = Calculation.getTimeDiffMs(secondHit!!, firstHitTemp!!)
         Log.v("App-Log", "Inintial timeDiffMs ${firstHitTemp.peak} $timeDiffMs")
         val peakDiff = (secondHit.peak - firstHitTemp.peak).absoluteValue
         //IF too fast = we took parts of break peak ->
@@ -182,19 +169,22 @@ class MainActivity : ComponentActivity() {
                         " PEAK_DIFF ${peakDiff >= AMPL_CHANGE_DB_THRESHOLD}"
 
             )
-            var firstHitTempIndex: Int = recordedTrack?.indexOf(firstHitTemp) ?: 0
+//            var firstHitTempIndex: Int = recordedTrack?.indexOf(firstHitTemp) ?: 0
+            var firstHitTempIndex: Int
             val sortedGraph = recordedTrack?.sortedBy { it.peak }?.reversed()
             var i = 1
-            var peakLow: Boolean = false
-            while ((timeDiffMs >= MAX_BREAKSPEED_MS || timeDiffMs <= MIN_BREAKSPEED_MS || !peakLow ) && i < recordedTrack?.size!!) {
+            var peakLow = false
+            while ((timeDiffMs >= MAX_BREAKSPEED_MS || timeDiffMs <= MIN_BREAKSPEED_MS || !peakLow) && i < recordedTrack?.size!!) {
                 firstHitTemp = sortedGraph?.get(i)
                 firstHitTempIndex = recordedTrack?.indexOf(firstHitTemp) ?: 0
-                peakLow = if (timeDiffMs <= MIN_BREAKSPEED_MS) false else checkLowPeak(
+                peakLow = if (timeDiffMs <= MIN_BREAKSPEED_MS) false else Calculation.checkLowPeak(
                     firstHitTempIndex,
-                    secondHitIndex
+                    secondHitIndex,
+                    recordedTrack!!,
+                    AMPL_LOW_PEAK_THRESHOLD
                 )
-                timeDiffMs = getTimeDiffMs(secondHit, firstHitTemp!!)
-                Log.v("App-Log", "Index relative $i ${firstHitTemp.peak} $timeDiffMs $peakLow")
+                timeDiffMs = Calculation.getTimeDiffMs(secondHit, firstHitTemp!!)
+//                Log.v("App-Log", "Index relative $i ${firstHitTemp.peak} $timeDiffMs $peakLow")
                 i++
             }
         }
@@ -213,27 +203,9 @@ class MainActivity : ComponentActivity() {
         Log.v("App-Log", "velocityRounded $velocityRounded $velocity ")
     }
 
-    fun getTimeDiffMs(secondHit: DataElement, firstHit: DataElement): Long {
-        return secondHit.timeLong.minus(firstHit.timeLong).absoluteValue ?: 0
-    }
-
-    fun checkLowPeak(first: Int, second: Int): Boolean {
-        val max = max(first, second)
-        val min = min(first, second)
-        val minPeak = recordedTrack?.slice(min..max)?.minBy { it.peak }
-        val firstPeak = recordedTrack?.get(first)
-        return firstPeak?.peak!! - minPeak?.peak!! > AMPL_LOW_PEAK_THRESHOLD
-    }
-
     override fun onDestroy() {
         super.onDestroy()
         stopRecording()
-    }
-
-    @RequiresApi(Build.VERSION_CODES.O)
-    private fun onMainButtonPress() {
-        Log.v("App-Log", "startRecording")
-        startRecording()
     }
 
 
