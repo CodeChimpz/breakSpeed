@@ -35,8 +35,9 @@ class MainButton constructor(
     //    onClick will run if is not activeRecording, onStop if is activeRecording
     private fun clickStateCheck(onClick: () -> Unit, onStop: () -> Unit) {
         if (activeRecording) {
-            activeRecording = false
-            onStop()
+//            activeRecording = false
+//            onStop()
+            return
         } else {
             activeRecording = true
             onClick()
@@ -45,6 +46,7 @@ class MainButton constructor(
 
     fun deactivateView() {
         Log.v("App-Log", "Change state PENDING")
+        activeRecording = false
         activity.runOnUiThread {
             buttonSaved.background = ContextCompat.getDrawable(context, R.drawable.btn_circular)
             buttonSaved.text = activity.getString(R.string.button_text_idle)

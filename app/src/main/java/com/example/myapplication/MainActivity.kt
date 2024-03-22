@@ -44,6 +44,7 @@ class MainActivity : ComponentActivity() {
     private var audioRecord: AudioRecord? = null
     private var textView: TextView? = null
     private var vizualSimple: View? = null
+    private var vizualSimpleSize: Int? = null
     private lateinit var mainButton: MainButton
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -55,6 +56,7 @@ class MainActivity : ComponentActivity() {
         mainButton = MainButton(btnCenter, this, this)
         textView = findViewById<TextView>(R.id.textView)
         vizualSimple = findViewById<View>(R.id.simpleViz)
+        vizualSimpleSize = vizualSimple?.layoutParams?.width
         mainButton.setOnClickListener(cb = {
             Thread {
                 Log.v("App-Log", "startRecording")
@@ -105,6 +107,9 @@ class MainActivity : ComponentActivity() {
         recordedTrack = arrayListOf()
         startTime = System.currentTimeMillis()
         isRecording = true
+        runOnUiThread {
+            vizualSimple?.background = ContextCompat.getDrawable(this, viz_simple)
+        }
         var totalTime: Long = 0
         val buffer = ShortArray(bufferSize)
         while (totalTime < setTimeout) {
@@ -112,7 +117,7 @@ class MainActivity : ComponentActivity() {
             read?.let {
                 // Analyze audio samples and find volume peaks
                 val maxAmplitude: Short = buffer.maxOrNull() ?: 0
-                Log.v("App-Log", "$maxAmplitude")
+
                 val timeNow = System.currentTimeMillis()
                 totalTime = timeNow - startTime!!
                 // Add to data with timestamp
@@ -125,17 +130,23 @@ class MainActivity : ComponentActivity() {
             }
         }
         stopRecording()
+        runOnUiThread {
+            vizualSimple?.background = null
+        }
         cb()
     }
 
     private fun visualiseSimple(peak: Double) {
-        if (peak > 0) {
-            vizualSimple?.background = ContextCompat.getDrawable(this, viz_simple)
-        }
-        val MAX_WIDTH = 50000
+//        if (peak.toInt() == 0) {
+//            return
+//        }
+        val MAX_WIDTH: Double = 30000.0
         val layoutParams = vizualSimple?.layoutParams
-        layoutParams?.width = (peak / MAX_WIDTH * layoutParams?.width!!).toInt()
-        vizualSimple?.layoutParams = layoutParams
+        layoutParams?.width = (peak / MAX_WIDTH * vizualSimpleSize!!).toInt()
+//        Log.v("App-Log", "${layoutParams?.width} $vizualSimpleSize")
+        if (layoutParams?.width!! > 0) {
+            vizualSimple?.layoutParams = layoutParams
+        }
     }
 
     private fun stopRecording() {
