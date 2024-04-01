@@ -19,19 +19,17 @@ import com.example.myapplication.R.drawable.viz_simple
 import com.example.myapplication.R.id.button
 import com.example.myapplication.R.layout.activity_main
 import com.example.myapplication.buttons.MainButton
+import com.example.myapplication.constants.Constants
+import com.example.myapplication.util.Ball
 import com.example.myapplication.util.DataElement
+import com.example.myapplication.util.Table
 import java.math.RoundingMode
 import kotlin.math.absoluteValue
 
 
 class MainActivity : ComponentActivity() {
-    //    const
-    private val DEFAULT_DISTANCE_CM = 143
-    private val AMPL_LOW_PEAK_THRESHOLD = 500
-    private val AMPL_CHANGE_DB_THRESHOLD = 500
-    private val MAX_BREAKSPEED_MS = 800
-    private val MIN_BREAKSPEED_MS = 80
-    private val recordingTimeout: Long = 10000
+    private val ball: Ball = Ball()
+    private val table: Table = Table()
 
     //
     private var result: String? = null
@@ -50,8 +48,7 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(/* layoutResID = */ activity_main
-        )
+        setContentView(/* layoutResID = */ activity_main)
         val btnCenter = findViewById<Button>(button)
         mainButton = MainButton(btnCenter, this, this)
         textView = findViewById<TextView>(R.id.textView)
@@ -65,22 +62,28 @@ class MainActivity : ComponentActivity() {
         })
     }
 
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stopRecording()
+    }
+
     @RequiresApi(Build.VERSION_CODES.O)
     private fun startRecording() {
-        val sampleRate = 44100
+        val sampleRate = Constants.AUDIO_SAMPLE_RATE
         val channelConfig = AudioFormat.CHANNEL_IN_MONO
         val audioFormat = AudioFormat.ENCODING_PCM_16BIT
         val bufferSize = AudioRecord.getMinBufferSize(
             sampleRate,
             channelConfig,
             audioFormat
-        ) / 4
+        ) / Constants.AUDIO_MIN_BUFFER_DIV
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.RECORD_AUDIO
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            Log.v("App-Log", "checkSelfPermission FAILED")
+            Log.e("App-Log-Permission", "checkSelfPermission FAILED")
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
             return
         }
@@ -91,15 +94,25 @@ class MainActivity : ComponentActivity() {
             audioFormat,
             bufferSize
         )
-        recordThenExecute(bufferSize, recordingTimeout) {
+        //start recoding and register cb
+        recordThenExecute(bufferSize, Constants.DEFAULT_RECORDING_TIMEOUT) {
             analyzeResults()
         }
+        //render results
         if (result != null) {
             runOnUiThread {
                 textView?.text = result
             }
         }
         mainButton.deactivateView()
+    }
+
+
+    private fun stopRecording() {
+        Log.v("App-Log", "stopRecording")
+        isRecording = false
+        audioRecord?.stop()
+        audioRecord?.release()
     }
 
     private fun recordThenExecute(bufferSize: Int, setTimeout: Long, cb: () -> Unit = {}) {
@@ -117,12 +130,13 @@ class MainActivity : ComponentActivity() {
             read?.let {
                 // Analyze audio samples and find volume peaks
                 val maxAmplitude: Short = buffer.maxOrNull() ?: 0
-
                 val timeNow = System.currentTimeMillis()
                 totalTime = timeNow - startTime!!
                 // Add to data with timestamp
                 val newElement = DataElement(maxAmplitude, timeNow)
                 recordedTrack?.add(newElement)
+
+                //UI UPDATE
                 mainButton.updateButtonViewProgressDefault((totalTime.toDouble() / setTimeout.toDouble() * 100).toInt())
                 runOnUiThread {
                     visualiseSimple(maxAmplitude.toDouble())
@@ -137,26 +151,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun visualiseSimple(peak: Double) {
-//        if (peak.toInt() == 0) {
-//            return
-//        }
         val MAX_WIDTH: Double = 10000.0
         val layoutParams = vizualSimple?.layoutParams
         layoutParams?.width = (peak / MAX_WIDTH * vizualSimpleSize!!).toInt()
-//        Log.v("App-Log", "${layoutParams?.width} $vizualSimpleSize")
         if (layoutParams?.width!! > 0) {
             vizualSimple?.layoutParams = layoutParams
         }
     }
 
-    private fun stopRecording() {
-        Log.v("App-Log", "stopRecording")
-        isRecording = false
-        audioRecord?.stop()
-        audioRecord?.release()
-    }
+    private data class PeaksData(val breakPointMs: Float, val firstPointMs: Float) {}
 
-    private fun analyzeResults() {
+    private fun analyzeResults(): Long {
         Log.v("App-Log", "analyzeResults")
         val secondHit: DataElement? = recordedTrack?.maxBy { it.peak }
         val secondHitIndex = recordedTrack?.indexOf(secondHit) ?: 0
@@ -173,11 +178,11 @@ class MainActivity : ComponentActivity() {
         //IF too fast = we took parts of break peak ->
         //IF too slow = hit peak > break peak ->
         //-->Find the closest valid peak that isn't too fast
-        if (timeDiffMs >= MAX_BREAKSPEED_MS || timeDiffMs <= MIN_BREAKSPEED_MS || peakDiff >= AMPL_CHANGE_DB_THRESHOLD) {
+        if (timeDiffMs >= Constants.DEFAULT_MAX_BREAKSPEED_MS || timeDiffMs <= Constants.DEFAULT_MIN_BREAKSPEED_MS || peakDiff >= Constants.DEFAULT_AMPL_CHANGE_DB_THRESHOLD) {
             Log.v(
                 "App-Log",
-                "Reevaluating TOO_SLOW -> ${timeDiffMs >= MAX_BREAKSPEED_MS} TOO_FAST -> ${timeDiffMs <= MIN_BREAKSPEED_MS}" +
-                        " PEAK_DIFF ${peakDiff >= AMPL_CHANGE_DB_THRESHOLD}"
+                "Reevaluating TOO_SLOW -> ${timeDiffMs >= Constants.DEFAULT_MAX_BREAKSPEED_MS} TOO_FAST -> ${timeDiffMs <= Constants.DEFAULT_MIN_BREAKSPEED_MS}" +
+                        " PEAK_DIFF ${peakDiff >= Constants.DEFAULT_AMPL_CHANGE_DB_THRESHOLD}"
 
             )
 //            var firstHitTempIndex: Int = recordedTrack?.indexOf(firstHitTemp) ?: 0
@@ -185,38 +190,39 @@ class MainActivity : ComponentActivity() {
             val sortedGraph = recordedTrack?.sortedBy { it.peak }?.reversed()
             var i = 1
             var peakLow = false
-            while ((timeDiffMs >= MAX_BREAKSPEED_MS || timeDiffMs <= MIN_BREAKSPEED_MS || !peakLow) && i < recordedTrack?.size!!) {
+            while ((timeDiffMs >= Constants.DEFAULT_MAX_BREAKSPEED_MS || timeDiffMs <= Constants.DEFAULT_MIN_BREAKSPEED_MS || !peakLow) && i < recordedTrack?.size!!) {
                 firstHitTemp = sortedGraph?.get(i)
                 firstHitTempIndex = recordedTrack?.indexOf(firstHitTemp) ?: 0
-                peakLow = if (timeDiffMs <= MIN_BREAKSPEED_MS) false else Calculation.checkLowPeak(
-                    firstHitTempIndex,
-                    secondHitIndex,
-                    recordedTrack!!,
-                    AMPL_LOW_PEAK_THRESHOLD
-                )
+                peakLow =
+                    if (timeDiffMs <= Constants.DEFAULT_MIN_BREAKSPEED_MS) false else Calculation.checkLowPeak(
+                        firstHitTempIndex,
+                        secondHitIndex,
+                        recordedTrack!!,
+                        Constants.DEFAULT_AMPL_LOW_PEAK_THRESHOLD
+                    )
                 timeDiffMs = Calculation.getTimeDiffMs(secondHit, firstHitTemp!!)
 //                Log.v("App-Log", "Index relative $i ${firstHitTemp.peak} $timeDiffMs $peakLow")
                 i++
             }
         }
         val firstHit = firstHitTemp
+        val timeDiffS = (timeDiffMs.toDouble() / 1000).absoluteValue
         Log.v("App-Log", "first peak ${firstHit?.peak}")
         Log.v("App-Log", "second peak ${secondHit.peak}")
-        val timeDiffS = (timeDiffMs.toDouble() / 1000).absoluteValue
-        Log.v("App-Log", "timeDiffMs $timeDiffMs $timeDiffS")
+        return timeDiffMs
+
+    }
+
+    private fun getResults(timeDiffS: Long) {
         if (timeDiffS <= 0) {
             return
         }
-        val velocity = (DEFAULT_DISTANCE_CM / timeDiffS) / 100 * 2.24
+        val S = Calculation.getDistance(ball, table)
+        val velocity = (S / timeDiffS) / 100 * 2.24
         val velocityRounded = velocity.toBigDecimal().setScale(1, RoundingMode.UP)
         //TODO:
         result = "" + velocityRounded + "mph"
         Log.v("App-Log", "velocityRounded $velocityRounded $velocity ")
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        stopRecording()
     }
 
 

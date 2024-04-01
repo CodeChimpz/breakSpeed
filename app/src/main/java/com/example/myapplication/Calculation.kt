@@ -1,7 +1,9 @@
 package com.example.myapplication
 
 import android.media.AudioRecord
+import com.example.myapplication.util.Ball
 import com.example.myapplication.util.DataElement
+import com.example.myapplication.util.Table
 import kotlin.math.absoluteValue
 import kotlin.math.max
 import kotlin.math.min
@@ -23,6 +25,12 @@ class Calculation {
             val minPeak = recordedTrack.slice(min..max).minBy { it.peak }
             val firstPeak = recordedTrack[first]
             return firstPeak.peak - minPeak.peak > AMPL_LOW_PEAK_THRESHOLD
+        }
+
+        fun getDistance(
+            ball: Ball, table: Table
+        ): Double {
+            return table.distanceCm - ball.radius
         }
     }
 }
