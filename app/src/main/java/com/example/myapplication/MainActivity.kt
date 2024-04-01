@@ -208,7 +208,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         val velocity = (DEFAULT_DISTANCE_CM / timeDiffS) / 100 * 2.24
-        val velocityRounded = velocity.toBigDecimal().setScale(2, RoundingMode.UP)
+        val velocityRounded = velocity.toBigDecimal().setScale(1, RoundingMode.UP)
         //TODO:
         result = "" + velocityRounded + "mph"
         Log.v("App-Log", "velocityRounded $velocityRounded $velocity ")
