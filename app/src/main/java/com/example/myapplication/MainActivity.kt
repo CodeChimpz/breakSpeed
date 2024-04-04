@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
                 recorder.startRecording(
                     setTimeout,
                     ::updateUiOnRecord,
-                    ::analyzeResults
+                    ::finishRecord
                 )
             }.start()
         })
@@ -85,6 +85,11 @@ class MainActivity : ComponentActivity() {
                 )
             )
         }
+    }
+
+    fun finishRecord(recordedTrack: ArrayList<DataElement>) {
+        val result = analyzeResults(recordedTrack)
+        getResults(result)
     }
 
     fun analyzeResults(recordedTrack: ArrayList<DataElement>): Float {
@@ -123,7 +128,6 @@ class MainActivity : ComponentActivity() {
         }
         val firstHit = firstHitTemp
         val timeDiffS = (timeDiffMs.toDouble() / 1000).absoluteValue.toFloat()
-        getResults(timeDiffS)
         return timeDiffS
     }
 
@@ -140,6 +144,7 @@ class MainActivity : ComponentActivity() {
         //\
         runOnUiThread {
             textView.text = result
+            mainButton.deactivateView()
         }
     }
 
