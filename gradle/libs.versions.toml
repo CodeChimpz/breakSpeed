@@ -11,6 +11,8 @@ activityCompose = "1.8.2"
 composeBom = "2024.02.02"
 constraintlayout = "2.1.4"
 appcompat = "1.6.1"
+mpandroidchart = "v3.1.0"
+mpandroidchartVersion = "v3.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -30,6 +32,7 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3" 
 androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 kotlin-logging-jvm = { module = "io.github.microutils:kotlin-logging-jvm", version.ref = "kotlinLoggingJvm" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+mpandroidchart = { module = "com.github.PhilJay:MPAndroidChart", version.ref = "mpandroidchartVersion" }
 
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }

@@ -7,6 +7,8 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.widget.Button
@@ -23,11 +25,19 @@ import com.example.myapplication.constants.Constants
 import com.example.myapplication.util.Ball
 import com.example.myapplication.util.DataElement
 import com.example.myapplication.util.Table
+import com.github.mikephil.charting.charts.LineChart
+import com.github.mikephil.charting.data.Entry
+import com.github.mikephil.charting.data.LineData
+import com.github.mikephil.charting.data.LineDataSet
 import java.math.RoundingMode
 import kotlin.math.absoluteValue
 
 
 class MainActivity : ComponentActivity() {
+    private lateinit var handlerGraph: Handler
+    private lateinit var runnableGraph: Runnable // reference to the runnable object
+
+
     private val ball: Ball = Ball()
     private val table: Table = Table()
 
@@ -36,14 +46,18 @@ class MainActivity : ComponentActivity() {
     private var startTime: Long? = null
     private var currentTime: Long? = null
     private var isRecording = false
-    private var recordedTrack: ArrayList<DataElement>? = arrayListOf()
+
+    //track data
+    private var recordedTrack: ArrayList<DataElement> = arrayListOf()
+    private var entries: ArrayList<Entry> = arrayListOf()
 
     //
-    private var audioRecord: AudioRecord? = null
-    private var textView: TextView? = null
-    private var vizualSimple: View? = null
+    private lateinit var audioRecord: AudioRecord
+    private lateinit var textView: TextView
+    private lateinit var vizualSimple: View
     private var vizualSimpleSize: Int? = null
     private lateinit var mainButton: MainButton
+    private lateinit var chart: LineChart
 
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,10 +65,40 @@ class MainActivity : ComponentActivity() {
         setContentView(/* layoutResID = */ activity_main)
         val btnCenter = findViewById<Button>(button)
         mainButton = MainButton(btnCenter, this, this)
+        //setup vizualizer
         textView = findViewById<TextView>(R.id.textView)
         vizualSimple = findViewById<View>(R.id.simpleViz)
-        vizualSimpleSize = vizualSimple?.layoutParams?.width
+        vizualSimpleSize = vizualSimple.layoutParams?.width
+        //setup chart
+        chart = findViewById<LineChart>(R.id.chart) as LineChart
+        // Hide grid lines on both axes
+        chart.description.isEnabled = false;
+        chart.setDrawGridBackground(false);
+        chart.xAxis.setDrawGridLines(false);
+        chart.axisLeft.setDrawGridLines(false);
+        chart.axisRight.setDrawGridLines(false);
+        chart.axisRight.setDrawLimitLinesBehindData(false);
+        chart.axisLeft.setDrawLabels(false);
+        chart.axisRight.setDrawLabels(false);
+        chart.xAxis.setDrawLabels(false);
+        chart.xAxis.setDrawLimitLinesBehindData(false);
+        chart.legend.isEnabled = false;
+        //register button
         mainButton.setOnClickListener(cb = {
+            entries.clear()
+            updateGraph(arrayListOf())
+            handlerGraph = Handler(Looper.getMainLooper())
+            Log.v("App-Log-GRAPHING", "GRAPHING init")
+            runnableGraph = Runnable {
+                val entriesCopied = ArrayList<Entry>(entries)
+                if (entriesCopied.size > 0) {
+                    runOnUiThread {
+                        updateGraph(entriesCopied)
+                    }
+                }
+                handlerGraph.postDelayed(runnableGraph, 10)
+            }
+            handlerGraph.post(runnableGraph)
             Thread {
                 Log.v("App-Log", "startRecording")
                 startRecording()
@@ -113,6 +157,7 @@ class MainActivity : ComponentActivity() {
         isRecording = false
         audioRecord?.stop()
         audioRecord?.release()
+        handlerGraph.removeCallbacks(runnableGraph)
     }
 
     private fun recordThenExecute(bufferSize: Int, setTimeout: Long, cb: () -> Unit = {}) {
@@ -133,8 +178,12 @@ class MainActivity : ComponentActivity() {
                 val timeNow = System.currentTimeMillis()
                 totalTime = timeNow - startTime!!
                 // Add to data with timestamp
-                val newElement = DataElement(maxAmplitude, timeNow)
-                recordedTrack?.add(newElement)
+                val newElement = DataElement(maxAmplitude, totalTime)
+                recordedTrack.add(newElement)
+
+                //add to GRAPH entry list
+                val entry = Entry(newElement.timeLong.toFloat(), newElement.peak.toFloat())
+                entries.add(entry)
 
                 //UI UPDATE
                 mainButton.updateButtonViewProgressDefault((totalTime.toDouble() / setTimeout.toDouble() * 100).toInt())
@@ -148,6 +197,17 @@ class MainActivity : ComponentActivity() {
             vizualSimple?.background = null
         }
         cb()
+    }
+
+    private fun updateGraph(entriesArr: ArrayList<Entry>) {
+        val dataSet = LineDataSet(entriesArr, "Plot")
+        dataSet.setDrawValues(false)
+        dataSet.setDrawCircles(false)
+        val lineData = LineData(dataSet)
+        runOnUiThread {
+            chart.setData(lineData)
+            chart.invalidate();
+        }
     }
 
     private fun visualiseSimple(peak: Double) {
@@ -171,7 +231,7 @@ class MainActivity : ComponentActivity() {
             0
         }
         Log.v("App-Log", "second peak ${secondHit?.peak}")
-        var firstHitTemp: DataElement? = recordedTrack?.slice(0..<splitIndex)?.maxBy { it.peak }
+        var firstHitTemp: DataElement? = recordedTrack.slice(0..<splitIndex)?.maxBy { it.peak }
         var timeDiffMs = Calculation.getTimeDiffMs(secondHit!!, firstHitTemp!!)
         Log.v("App-Log", "Inintial timeDiffMs ${firstHitTemp.peak} $timeDiffMs")
         val peakDiff = (secondHit.peak - firstHitTemp.peak).absoluteValue
@@ -210,7 +270,6 @@ class MainActivity : ComponentActivity() {
         Log.v("App-Log", "first peak ${firstHit?.peak}")
         Log.v("App-Log", "second peak ${secondHit.peak}")
         return timeDiffMs
-
     }
 
     private fun getResults(timeDiffS: Long) {
