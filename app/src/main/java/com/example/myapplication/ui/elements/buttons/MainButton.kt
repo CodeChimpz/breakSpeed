@@ -1,4 +1,4 @@
-package com.example.myapplication.buttons
+package com.example.myapplication.ui.elements.buttons
 
 import android.content.Context
 import android.util.Log

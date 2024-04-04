@@ -1,9 +1,8 @@
-package com.example.myapplication
+package com.example.myapplication.services
 
-import android.media.AudioRecord
-import com.example.myapplication.util.Ball
-import com.example.myapplication.util.DataElement
-import com.example.myapplication.util.Table
+import com.example.myapplication.entities.Ball
+import com.example.myapplication.entities.DataElement
+import com.example.myapplication.entities.Table
 import kotlin.math.absoluteValue
 import kotlin.math.max
 import kotlin.math.min
